@@ -70,17 +70,25 @@ async function run() {
     const invoiceCollection = client
       .db("storeManagementApp")
       .collection("invoiceCounters");
+    const pcCollection = client
+      .db("storeManagementApp")
+      .collection("productCounters"); // pc -- product counter
 
     //-------------------++++-----------------
     // Function to generate a 7-digit productCode with prefix 'P'
     const generateProductCode = async () => {
-      // Get the current product count
-      const productCount = await productCollection.countDocuments();
-      // Increment the count to generate the next product code
-      const nextProductCodeNumber = productCount + 1;
-      // Generate the 7-digit code with leading zeros and prefix "P"
-      const productCode = `P${String(nextProductCodeNumber).padStart(7, "0")}`;
-      return productCode;
+      // Find or create a counter document
+      const counterDoc = await pcCollection.findOneAndUpdate(
+        { _id: "productCounter" }, // Using a fixed ID to track sequence
+        { $inc: { sequence: 1 } }, // Increment the sequence by 1
+        { upsert: true, returnDocument: "after" } // Create if not exists, return updated document
+      );
+      // Extract the sequence from the updated document, defaulting to 1 if undefined
+      const sequence = counterDoc?.sequence || 1;
+      // Pad the sequence to 4 digits (e.g., 0001, 0002, etc.)
+      const sequencePart = String(sequence).padStart(5, "0");
+      // Return the pc number in the format: P-SEQ
+      return `P${sequencePart}`;
     };
 
     // Product Cost Calculation
@@ -113,13 +121,13 @@ async function run() {
       );
 
       // Extract the sequence from the updated document
-      const sequence = counterDoc.value?.sequence || 1; // Default to 1 if undefined
+      const sequence = counterDoc?.sequence || 1; // Default to 1 if undefined
 
       // Pad the sequence to 3 digits (e.g., 001, 002, etc.)
       const sequencePart = String(sequence).padStart(3, "0");
 
       // Return the invoice number in the format: INV-YYYYMMDD-SEQ
-      return `INV-${datePart}-${sequencePart}`;
+      return `INV-${sequencePart}`;
     };
 
     //-------------------++++-----------------
@@ -187,9 +195,9 @@ async function run() {
     app.get("/products/:id", async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
-      console.log(query);
+      // console.log(query);
       const result = await productCollection.find(query).toArray();
-      console.log(result);
+      // console.log(result);
       res.send(result);
     });
     // Creating
@@ -304,23 +312,23 @@ async function run() {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       // Ensure inStock and productQuantity are numbers
-      console.log(parseInt(inStock, 10));
-      console.log(parseInt(productQuantity, 10));
+      // console.log(parseInt(inStock, 10));
+      // console.log(parseInt(productQuantity, 10));
       const updatedInStock =
         parseInt(inStock, 10) + parseInt(productQuantity, 10);
-      console.log(updatedInStock);
-      console.log(filter);
-      console.log(
-        inStock,
-        productQuantity,
-        stockAlert,
-        costRMB,
-        rmbRate,
-        transportCost,
-        productCost,
-        productPrice,
-        date
-      );
+      // console.log(updatedInStock);
+      // console.log(filter);
+      // console.log(
+      //   inStock,
+      //   productQuantity,
+      //   stockAlert,
+      //   costRMB,
+      //   rmbRate,
+      //   transportCost,
+      //   productCost,
+      //   productPrice,
+      //   date
+      // );
       // console.log(filter);
       const updateDoc = {
         $set: {
@@ -344,10 +352,11 @@ async function run() {
     // POST route to handle sales and update the product stock
     app.post("/sale", async (req, res) => {
       const { products, customer } = req.body;
-      console.log(customer);
+      // console.log(customer);
 
       try {
         const invoiceNumber = await getInvoiceNumber(); // Generate the invoice number here
+        console.log("invoiceNumber inside:", invoiceNumber);
         const bulkOperations = await Promise.all(
           // Promise.all runs multiple asynchronous operations in parallel
           products.map(async (product) => {
@@ -445,7 +454,7 @@ async function run() {
     app.get("/sales-list/:id", async (req, res) => {
       try {
         const { id } = req.params;
-        console.log(id);
+        // console.log(id);
         const query = { _id: new ObjectId(id) };
 
         const salesRecord = await salesRecordsCollection.find(query).toArray();
@@ -469,16 +478,16 @@ async function run() {
         const bulkOperations = await Promise.all(
           // Process each product for stock adjustment
           specSalesProduct.map(async (product) => {
-            console.log("product", product);
+            // console.log("product", product);
             // Fetch only the inStock field for the product
             const foundProduct = await productCollection.findOne(
               { _id: new ObjectId(product.productId) }, // Match document by product ID
               { projection: { inStock: 1 } } // Only retrieve the inStock field
             );
-            console.log("Found Product", foundProduct);
+            // console.log("Found Product", foundProduct);
             // Access the inStock amount for the found product
             let inStock = parseInt(foundProduct?.inStock, 10);
-            console.log("inStock", inStock);
+            // console.log("inStock", inStock);
             if (isNaN(inStock)) {
               console.error(
                 `Invalid inStock for product ID ${product?.productId}`
