@@ -397,7 +397,7 @@ async function run() {
           customer: customer,
           products: products.map((product) => ({
             productId: product._id,
-            productName: `${product.subCategory} - ${product.subsubCategory}`,
+            productName:  `${product.brand}-(${product.subCategory}), ${product.category} ${product.subsubCategory}`,
             quantity: product.sellingAmount,
             price: product.productPrice,
             total: product.productPrice * product.sellingAmount,
@@ -540,9 +540,13 @@ async function run() {
     //-------------------++++-----------------
     //Query for tCategory
     app.get("/category", async (req, res) => {
-      const result = await categoryCollection.find().toArray();
+      const result = await categoryCollection
+        .find()
+        .sort({ name: 1 })
+        .toArray();
       res.send(result);
     });
+
     app.get("/category/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) }; // Direct query
@@ -578,7 +582,10 @@ async function run() {
     // -------------- SubCategory -------------------
     // Subcategory find all
     app.get("/subcategory", async (req, res) => {
-      const result = await subCategoryCollection.find().toArray();
+      const result = await subCategoryCollection
+        .find()
+        .sort({ categoryName: 1, name: 1 })
+        .toArray();
       res.send(result);
     });
     // Search subcategory item
@@ -630,7 +637,10 @@ async function run() {
     // ------------------ Subsubcategoty --------------
     // Subsubcategory
     app.get("/subsubcategory", async (req, res) => {
-      const result = await subSubCategoryCollection.find().toArray();
+      const result = await subSubCategoryCollection
+        .find()
+        .sort({ subcategoryName: 1, name: 1 })
+        .toArray();
       res.send(result);
     });
     //Find subsubcategory on specific id (_id)
