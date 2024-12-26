@@ -397,7 +397,7 @@ async function run() {
           customer: customer,
           products: products.map((product) => ({
             productId: product._id,
-            productName:  `${product.brand}-(${product.subCategory}), ${product.category} ${product.subsubCategory}`,
+            productName: `${product.brand}-(${product.subCategory}), ${product.category} ${product.subsubCategory}`,
             quantity: product.sellingAmount,
             price: product.productPrice,
             total: product.productPrice * product.sellingAmount,
@@ -579,6 +579,38 @@ async function run() {
       const result = await categoryCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
+
+    //---------++ For Brands ++--------
+    app.get("/brands", async (req, res) => {
+      const result = await brandCollection.find().sort({ name: 1 }).toArray();
+      res.send(result);
+    });
+    //Delete a Brand item
+    app.delete("/brand/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await brandCollection.deleteOne(query);
+      res.send(result);
+    });
+    // Add Brand
+    app.post("/brand", async (req, res) => {
+      const item = req.body;
+      const result = await brandCollection.insertOne(item);
+      res.send(result);
+    });
+    // Edit Brand
+    app.patch("/brand/:id", async (req, res) => {
+      const item = req.body;
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          name: item.name,
+        },
+      };
+      const result = await brandCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
     // -------------- SubCategory -------------------
     // Subcategory find all
     app.get("/subcategory", async (req, res) => {
@@ -699,6 +731,7 @@ async function run() {
       const result = await brandCollection.find().toArray();
       res.send(result);
     });
+
     //-------------------++++-----------
 
     // Send a ping to confirm a successful connection
