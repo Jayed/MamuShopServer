@@ -132,6 +132,65 @@ async function run() {
 
     //-------------------++++-----------------
 
+    //----+++ Dashboard start ++--------
+    // getting total inStock
+    app.get("/total-instock", async (req, res) => {
+      try {
+        const result = await productCollection
+          .aggregate([
+            { $group: { _id: null, totalInStock: { $sum: "$inStock" } } },
+          ])
+          .toArray();
+
+        // console.log(result);
+
+        const totalInStock = result[0]?.totalInStock || 0;
+
+        res.status(200).json({ totalInStock });
+      } catch (error) {
+        console.error("Error calculating total inStock:", error);
+        res.status(500).json({ message: "Server error" });
+      }
+    });
+    // getting total stock value
+    app.get("/total-stock-value", async (req, res) => {
+      try {
+        const result = await productCollection
+          .aggregate([
+            {
+              $group: {
+                _id: null, // No grouping key; calculate for the entire collection
+                totalStockValue: {
+                  $sum: {
+                    $multiply: [
+                      "$inStock", // Quantity in stock
+                      {
+                        $add: [
+                          { $multiply: ["$costRMB", "$rmbRate"] }, // costRMB * rmbRate
+                          "$transportCost", // Add transportCost
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          ])
+          .toArray();
+
+        // console.log(result);
+
+        const totalStockValue = parseFloat((result[0]?.totalStockValue || 0).toFixed(2));
+
+        res.status(200).json({ totalStockValue });
+      } catch (error) {
+        console.error("Error calculating total stock value:", error);
+        res.status(500).json({ message: "Server error" });
+      }
+    });
+
+    //----+++ Dashboard end ++---------
+
     //-------+++ Customers ++------------
     // Create a new customer
     app.post("/customers", async (req, res) => {
