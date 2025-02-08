@@ -25,6 +25,7 @@ const {
   Collection,
 } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.4vti4xu.mongodb.net/?retryWrites=true&w=majority`;
+
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
@@ -37,6 +38,8 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect(); comment for deploy
+
+    //Collection declare
 
     //-------------------++++-----------------
     //Collection declare
@@ -91,23 +94,6 @@ async function run() {
       return `P${sequencePart}`;
     };
 
-    // Product Cost Calculation
-    // const productCostCalculation = async (costRMB, rmbRate, transportCost) => {
-    //   // Convert string values to numbers (float or integer)
-    //   const costRMBNum = parseFloat(costRMB);
-    //   const rmbRateNum = parseFloat(rmbRate);
-    //   const transportCostNum = parseFloat(transportCost);
-
-    //   // Debug: Check converted values
-    //   // console.log(costRMBNum, rmbRateNum, transportCostNum);
-
-    //   // Perform the calculation
-    //   const result = ((costRMBNum * rmbRateNum + transportCostNum) * 1).toFixed(
-    //     2
-    //   );
-
-    //   return result;
-    // };
     // Function to generate a unique invoice number
     const getInvoiceNumber = async () => {
       const date = new Date(); // Get the current date in local time
@@ -180,11 +166,122 @@ async function run() {
 
         // console.log(result);
 
-        const totalStockValue = parseFloat((result[0]?.totalStockValue || 0).toFixed(2));
+        const totalStockValue = parseFloat(
+          (result[0]?.totalStockValue || 0).toFixed(2)
+        );
 
         res.status(200).json({ totalStockValue });
       } catch (error) {
         console.error("Error calculating total stock value:", error);
+        res.status(500).json({ message: "Server error" });
+      }
+    });
+    // getting total customers
+    app.get("/total-customers", async (req, res) => {
+      try {
+        const totalCustomers = await customersCollection.countDocuments();
+        res.status(200).json({ totalCustomers });
+      } catch (error) {
+        console.error("Error fetching total customers:", error);
+        res.status(500).json({ message: "Server error" });
+      }
+    });
+    // getting total invoices
+    app.get("/total-invoices", async (req, res) => {
+      try {
+        const totalInvoices = await salesRecordsCollection.countDocuments();
+        res.status(200).json({ totalInvoices });
+      } catch (error) {
+        console.error("Error fetching total invoices:", error);
+        res.status(500).json({ message: "Server error" });
+      }
+    });
+
+    // getting sales-report
+    app.get("/sales-report", async (req, res) => {
+      try {
+        // Get the start and end dates from query parameters (expected format: YYYY-MM-DD)
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+          return res.status(400).json({
+            message:
+              "Both startDate and endDate parameters are required (format: YYYY-MM-DD)",
+          });
+        }
+
+        // Convert input date strings to Date objects
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        if (isNaN(start) || isNaN(end)) {
+          return res
+            .status(400)
+            .json({ message: "Invalid date format. Use YYYY-MM-DD." });
+        }
+
+        // Set start time to 00:00:00 and end time to 23:59:59
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+
+        // Query sales data for the time interval
+        const result = await salesRecordsCollection
+          .aggregate([
+            {
+              $match: {
+                date: { $gte: start, $lte: end }, // Filter records in the date range
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalSales: { $sum: "$totalAmount" },
+                totalProfit: { $sum: "$totalProfit" },
+              },
+            },
+          ])
+          .toArray();
+
+        console.log(result);
+        const totalSales = (result[0]?.totalSales || 0).toFixed(2);
+        const totalProfit = (result[0]?.totalProfit || 0).toFixed(2);
+
+        console.log(totalProfit);
+
+        console.log(
+          `Total Sales from ${startDate} to ${endDate}: `,
+          totalSales,
+          totalProfit
+        );
+
+        res.status(200).json({ startDate, endDate, totalSales, totalProfit });
+      } catch (error) {
+        console.error("Error calculating sales for the time interval:", error);
+        res.status(500).json({ message: "Server error" });
+      }
+    });
+    // stock alert
+    app.get("/stock-alert", async (req, res) => {
+      try {
+        const result = await productCollection
+          .aggregate([
+            {
+              $match: { $expr: { $lt: ["$inStock", "$stockAlert"] } }, // Filter products where inStock < stockAlert
+            },
+            {
+              $addFields: {
+                shortage: { $subtract: ["$stockAlert", "$inStock"] },
+              }, // Compute shortage quantity
+            },
+            {
+              $sort: { shortage: -1 }, // Sort by shortage in descending order
+            },
+          ])
+          .toArray();
+
+        res.status(200).json(result);
+      } catch (error) {
+        console.error("Error fetching stock alert data:", error);
         res.status(500).json({ message: "Server error" });
       }
     });
@@ -246,10 +343,80 @@ async function run() {
 
     //-------+++ Products ++------------
     // Finding
+    // app.get("/products", async (req, res) => {
+    //   const products = await productCollection.find().sort({
+    //     brand: -1,
+    //     category: 1,
+    //     subCategory: 1,
+    //     subsubCategory: 1,
+    //   }).toArray();
+    //   // Adding inStock value
+    //   const enrichedProducts = products.map((product) => ({
+    //     ...product,
+    //     inStockValue: product.inStock * (product.rmbRate*product.costRMB + product.transportCost), // inStack calculation
+    //   }));
+    //   // console.log(enrichedProducts);
+    //   res.send(enrichedProducts);
+    // });
     app.get("/products", async (req, res) => {
-      const result = await productCollection.find().toArray();
-      res.send(result);
+      try {
+        const products = await productCollection
+          .aggregate([
+            {
+              $addFields: {
+                normalizedBrand: {
+                  $replaceAll: { input: "$brand", find: " ", replacement: "" },
+                },
+                normalizedCategory: {
+                  $replaceAll: {
+                    input: "$category",
+                    find: " ",
+                    replacement: "",
+                  },
+                },
+                normalizedSubCategory: {
+                  $replaceAll: {
+                    input: "$subCategory",
+                    find: " ",
+                    replacement: "",
+                  },
+                },
+                normalizedSubSubCategory: {
+                  $replaceAll: {
+                    input: "$subsubCategory",
+                    find: " ",
+                    replacement: "",
+                  },
+                },
+              },
+            },
+            // Sort the documents
+            {
+              $sort: {
+                normalizedBrand: -1, // Descending
+                normalizedCategory: 1, // Ascending
+                normalizedSubCategory: 1, // Ascending
+                normalizedSubSubCategory: 1, // Ascending
+              },
+            },
+          ])
+          .toArray();
+
+        // Adding inStock value
+        const enrichedProducts = products.map((product) => ({
+          ...product,
+          inStockValue:
+            product.inStock *
+            (product.rmbRate * product.costRMB + product.transportCost), // inStock calculation
+        }));
+
+        res.send(enrichedProducts);
+      } catch (error) {
+        console.error("Error fetching products:", error);
+        res.status(500).send({ error: "Failed to fetch products" });
+      }
     });
+
     // Finding using id
     app.get("/products/:id", async (req, res) => {
       const { id } = req.params;
@@ -411,61 +578,76 @@ async function run() {
     // POST route to handle sales and update the product stock
     app.post("/sale", async (req, res) => {
       const { products, customer } = req.body;
-      // console.log(customer);
 
       try {
         const invoiceNumber = await getInvoiceNumber(); // Generate the invoice number here
-        console.log("invoiceNumber inside:", invoiceNumber);
-        const bulkOperations = await Promise.all(
-          // Promise.all runs multiple asynchronous operations in parallel
-          products.map(async (product) => {
-            const foundProduct = await productCollection.findOne({
-              _id: new ObjectId(product._id),
+
+        // Step 1: Validate stock before proceeding
+        for (const product of products) {
+          const foundProduct = await productCollection.findOne({
+            _id: new ObjectId(product._id),
+          });
+
+          if (!foundProduct) {
+            return res
+              .status(400)
+              .send({ error: `Product not found: ${product._id}` });
+          }
+
+          let inStock = parseInt(foundProduct.inStock, 10);
+          if (isNaN(inStock)) {
+            console.error(`Invalid inStock for product ID ${product._id}`);
+            return res
+              .status(400)
+              .send({
+                error: `Invalid stock data for product: ${product._id}`,
+              });
+          }
+
+          if (product.sellingAmount > inStock) {
+            return res.status(400).send({
+              error: `⚠️ Error: Selling amount (${product.sellingAmount}) exceeds available stock (${inStock}) for ${product.brand} - ${product.subCategory}`,
             });
-
-            let inStock = parseInt(foundProduct.inStock, 10);
-            if (isNaN(inStock)) {
-              console.error(`Invalid inStock for product ID ${product._id}`);
-              return null;
-            }
-
-            return {
-              updateOne: {
-                filter: { _id: new ObjectId(product._id) },
-                update: {
-                  $inc: { inStock: -parseInt(product.sellingAmount, 10) },
-                },
-              },
-            };
-          })
-        );
-
-        const validOperations = bulkOperations.filter(Boolean); //Filters out any null values from bulkOperations (from failed operations), leaving only valid operations.
-        if (validOperations.length === 0) {
-          return res
-            .status(400)
-            .send({ error: "No valid operations to perform." });
+          }
         }
 
+        // Step 2: Proceed with stock update only if all validations pass
+        const bulkOperations = products.map((product) => ({
+          updateOne: {
+            filter: { _id: new ObjectId(product._id) },
+            update: {
+              $inc: { inStock: -parseInt(product.sellingAmount, 10) },
+            },
+          },
+        }));
+
         const stockUpdateResult = await productCollection.bulkWrite(
-          validOperations
+          bulkOperations
         );
 
-        // Record the sale in salesRecords collection
+        // Step 3: Record the sale in salesRecords collection
         const saleRecord = {
-          customer: customer,
+          customer,
           products: products.map((product) => ({
             productId: product._id,
             productName: `${product.brand}-(${product.subCategory}), ${product.category} ${product.subsubCategory}`,
+            productCost: product.productCost,
             quantity: product.sellingAmount,
-            price: product.productPrice,
+            price: product.productPrice, // final selling price
             total: product.productPrice * product.sellingAmount,
           })),
-          invoiceNumber: invoiceNumber, // Save the unique invoice number
+          invoiceNumber,
           date: new Date(),
           totalAmount: products.reduce(
             (total, product) =>
               total + product.productPrice * product.sellingAmount,
+            0
+          ),
+          totalProfit: products.reduce(
+            (total, product) =>
+              total +
+              (product.productPrice - product.productCost) *
+                product.sellingAmount,
             0
           ),
         };
@@ -480,6 +662,7 @@ async function run() {
           .send({ error: "Failed to complete sale and save record." });
       }
     });
+
     // sales list all
     app.get("/sales-list", async (req, res) => {
       try {
@@ -491,6 +674,7 @@ async function run() {
                 customer: 1,
                 date: 1,
                 totalAmount: 1,
+                totalProfit: 1,
                 invoiceNumber: 1,
               },
             }
@@ -586,14 +770,6 @@ async function run() {
       }
     });
 
-    //-------------------++++-----------------
-
-    //-------------------++++-----------------
-    // category: Query for categories
-    // app.get("/categories", async (req, res) => {
-    //   const result = await categoryCollection.find().toArray();
-    //   res.send(result);
-    // });
     //-------------------++++-----------------
 
     //-------------------++++-----------------
@@ -815,5 +991,4 @@ app.listen(port, () => {
 });
 //-------------------++++-----------------
 //-------------------++++-----------------
-//
-//-------------------++++-----------------
+
