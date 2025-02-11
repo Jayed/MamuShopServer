@@ -242,17 +242,17 @@ async function run() {
           ])
           .toArray();
 
-        console.log(result);
+        // console.log(result);
         const totalSales = (result[0]?.totalSales || 0).toFixed(2);
         const totalProfit = (result[0]?.totalProfit || 0).toFixed(2);
 
-        console.log(totalProfit);
+        // console.log(totalProfit);
 
-        console.log(
-          `Total Sales from ${startDate} to ${endDate}: `,
-          totalSales,
-          totalProfit
-        );
+        // console.log(
+        //   `Total Sales from ${startDate} to ${endDate}: `,
+        //   totalSales,
+        //   totalProfit
+        // );
 
         res.status(200).json({ startDate, endDate, totalSales, totalProfit });
       } catch (error) {
@@ -597,11 +597,9 @@ async function run() {
           let inStock = parseInt(foundProduct.inStock, 10);
           if (isNaN(inStock)) {
             console.error(`Invalid inStock for product ID ${product._id}`);
-            return res
-              .status(400)
-              .send({
-                error: `Invalid stock data for product: ${product._id}`,
-              });
+            return res.status(400).send({
+              error: `Invalid stock data for product: ${product._id}`,
+            });
           }
 
           if (product.sellingAmount > inStock) {
@@ -991,4 +989,3 @@ app.listen(port, () => {
 });
 //-------------------++++-----------------
 //-------------------++++-----------------
-
