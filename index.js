@@ -95,8 +95,29 @@ async function run() {
     };
 
     // Function to generate a unique invoice number
-    const getInvoiceNumber = async () => {
-      const date = new Date(); // Get the current date in local time
+    // const getInvoiceNumber = async () => {
+    //   const date = new Date(); // Get the current date in local time
+    //   const datePart = date.toLocaleDateString("en-CA").replace(/-/g, ""); // Format YYYYMMDD
+
+    //   // Find or create a counter document for the current date
+    //   const counterDoc = await invoiceCollection.findOneAndUpdate(
+    //     { date: datePart }, // Query by date
+    //     { $inc: { sequence: 1 } }, // Increment sequence
+    //     { upsert: true, returnDocument: "after" } // Create if not exists, return updated document
+    //   );
+
+    //   // Extract the sequence from the updated document
+    //   const sequence = counterDoc?.sequence || 1; // Default to 1 if undefined
+
+    //   // Pad the sequence to 3 digits (e.g., 001, 002, etc.)
+    //   const sequencePart = String(sequence).padStart(3, "0");
+
+    //   // Return the invoice number in the format: INV-YYYYMMDD-SEQ
+    //   return `INV-${sequencePart}`;
+    // };
+    const getInvoiceNumber = async (inputDate) => {
+      // Use provided date or default to the current date
+      const date = inputDate ? new Date(inputDate) : new Date();
       const datePart = date.toLocaleDateString("en-CA").replace(/-/g, ""); // Format YYYYMMDD
 
       // Find or create a counter document for the current date
@@ -577,10 +598,10 @@ async function run() {
     //---------------++ Sales ++--------------
     // POST route to handle sales and update the product stock
     app.post("/sale", async (req, res) => {
-      const { products, customer } = req.body;
-
+      const { products, customer, date } = req.body;
+      console.log(products, customer, date);
       try {
-        const invoiceNumber = await getInvoiceNumber(); // Generate the invoice number here
+        const invoiceNumber = await getInvoiceNumber(date); // Generate the invoice number here
 
         // Step 1: Validate stock before proceeding
         for (const product of products) {
@@ -635,7 +656,7 @@ async function run() {
             total: product.productPrice * product.sellingAmount,
           })),
           invoiceNumber,
-          date: new Date(),
+          date: date ? new Date(date) : new Date(), // Use provided date or default to today
           totalAmount: products.reduce(
             (total, product) =>
               total + product.productPrice * product.sellingAmount,
@@ -677,6 +698,7 @@ async function run() {
               },
             }
           )
+          .sort({ date: -1, invoiceNumber: -1 })
           .toArray();
 
         if (!salesRecords || salesRecords.length === 0) {
@@ -689,6 +711,7 @@ async function run() {
         res.status(500).json({ message: "Internal server error" });
       }
     });
+
     // sales list single (id)
     const { ObjectId } = require("mongodb");
     //get specific sales for an id
@@ -911,7 +934,7 @@ async function run() {
     //Find subsubcategory on specific id (_id)
     app.get("/subsubcategory/:subCategoryId", async (req, res) => {
       const id = req.params.subCategoryId;
-      // const query = { subCategoryId: new ObjectId(id) }; // subCategoryId
+      // const query = { subCategoryId: new ObjectId(id) }; // subCategoryIdj
       const query = { _id: new ObjectId(id) }; // _id
       // console.log(id);
       const result = await subSubCategoryCollection.find(query).toArray();
